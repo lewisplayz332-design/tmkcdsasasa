@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>REXI DASHBOARD</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f1115; color: #e2e8f0; font-family: ui-sans-serif, system-ui, sans-serif; }
+        .card { background-color: #1a1d24; border: 1px solid #2d3748; border-radius: 12px; padding: 24px; }
+        .input-field { background-color: #0f1115; border: 1px solid #2d3748; color: #e2e8f0; border-radius: 6px; padding: 8px 12px; width: 100%; font-size: 14px; }
+        .input-field:focus { outline: none; border-color: #48bb78; }
+        .btn-green { background-color: #48bb78; color: white; border-radius: 6px; padding: 8px 16px; font-weight: bold; cursor: pointer; }
+        .toggle-bg { background-color: #2d3748; width: 44px; height: 24px; border-radius: 12px; position: relative; transition: 0.3s; cursor: pointer; }
+        .toggle-dot { width: 18px; height: 18px; background-color: white; border-radius: 50%; position: absolute; top: 3px; left: 3px; transition: 0.3s; }
+        .toggle-active { background-color: #48bb78; }
+        .toggle-active .toggle-dot { left: 23px; }
+    </style>
+</head>
+<body class="p-8">
+    <div class="max-w-4xl mx-auto space-y-6">
+        
+        <div class="flex justify-between items-center card">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-600 p-2 rounded-lg text-white font-bold">⚡</div>
+                <h1 class="text-xl font-bold tracking-wider">REXI DASHBOARD</h1>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-4">
+            <div class="card">
+                <div class="text-gray-400 text-xs font-bold uppercase tracking-wider">Total Sent</div>
+                <div class="text-3xl font-bold text-green-500 mt-2" id="total-sent">0</div>
+            </div>
+            <div class="card">
+                <div class="text-gray-400 text-xs font-bold uppercase tracking-wider">Live Accounts</div>
+                <div class="text-3xl font-bold text-blue-500 mt-2" id="live-accounts">0</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <!-- Add Session -->
+            <div class="card space-y-4">
+                <div class="flex items-center space-x-2 text-gray-300 font-bold">
+                    <span>🔒</span> <span>Add Account (1 Proxy per Session)</span>
+                </div>
+                <div>
+                    <input type="text" id="session-input" placeholder="Paste sessionid cookie..." class="input-field mb-2">
+                    <input type="text" id="session-proxy-input" placeholder="http://user:pass@ip:port" class="input-field mb-2">
+                    <button onclick="addSession()" class="btn-green text-sm w-full">Add Account</button>
+                </div>
+                <div id="session-list" class="space-y-2 max-h-48 overflow-y-auto"></div>
+            </div>
+
+            <!-- Config -->
+            <div class="card space-y-4">
+                <div class="flex justify-between items-center text-gray-300 font-bold">
+                    <div class="flex items-center space-x-2">
+                        <span>⚙️</span> <span>Configuration</span>
+                    </div>
+                    <button onclick="saveConfig()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded">Save</button>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-500 font-bold block mb-1">GC LINK</label>
+                    <input type="text" id="gclink-input" class="input-field" placeholder="https://www.instagram.com/direct/t/123456/">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold block mb-1">TARGET</label>
+                        <input type="text" id="target-input" class="input-field" placeholder="username">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 font-bold block mb-1">DELAY (SECONDS)</label>
+                        <input type="number" step="0.1" id="delay-input" class="input-field" placeholder="0">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Engine Toggles -->
+        <div class="grid grid-cols-2 gap-4">
+            <!-- Spam Engine -->
+            <div class="card flex justify-between items-center">
+                <div>
+                    <h2 class="text-lg font-bold">Spam Engine</h2>
+                    <p class="text-xs text-gray-400 mt-1">Sends messages at max speed.</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm font-bold text-red-500" id="engine-status">STOPPED</span>
+                    <div class="toggle-bg" id="engine-toggle" onclick="toggleEngine()">
+                        <div class="toggle-dot"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Locker Mode -->
+            <div class="card flex justify-between items-center">
+                <div>
+                    <h2 class="text-lg font-bold">Locker Mode</h2>
+                    <p class="text-xs text-gray-400 mt-1">Locks the GC name (No spam required).</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm font-bold text-red-500" id="locker-status">OFF</span>
+                    <div class="toggle-bg" id="locker-toggle" onclick="toggleLocker()">
+                        <div class="toggle-dot"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Terminal Logs -->
+        <div class="card h-64 overflow-y-auto font-mono text-xs text-gray-300 bg-black" id="logs"></div>
+    </div>
+
+    <script>
+        let isRunning = false;
+        let isLockerRunning = false;
+        let configLoaded = false;
+
+        async function saveConfig() {
+            const target = document.getElementById('target-input').value;
+            const gc = document.getElementById('gclink-input').value;
+            const delay = document.getElementById('delay-input').value;
+            
+            await fetch('/api/config', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({target, gc_link: gc, delay: delay}) 
+            });
+        }
+
+        async function loadState() {
+            const res = await fetch('/api/state');
+            const data = await res.json();
+            
+            document.getElementById('total-sent').innerText = data.total_sent;
+            document.getElementById('live-accounts').innerText = data.sessions.length;
+            
+            if (!configLoaded) {
+                document.getElementById('target-input').value = data.target;
+                document.getElementById('gclink-input').value = data.gc_link;
+                document.getElementById('delay-input').value = data.delay;
+                configLoaded = true;
+            }
+            
+            const logBox = document.getElementById('logs');
+            logBox.innerHTML = data.logs.map(l => `<div>${l}</div>`).join('');
+            logBox.scrollTop = logBox.scrollHeight;
+
+            const sessionList = document.getElementById('session-list');
+            sessionList.innerHTML = data.sessions.map(s => `
+                <div class="bg-gray-900/50 rounded p-2 flex justify-between items-center border border-green-900/30">
+                    <div class="flex flex-col">
+                        <span class="text-green-400 text-sm font-bold">@${s.username}</span>
+                        <span class="text-gray-500 text-xs truncate w-48">${s.proxy ? s.proxy : 'No Proxy'}</span>
+                    </div>
+                    <button onclick="removeSession('${s.session_id}')" class="text-red-400 text-lg">&times;</button>
+                </div>
+            `).join('');
+
+            // Spam Toggle State
+            if (data.is_running !== isRunning) {
+                isRunning = data.is_running;
+                const toggle = document.getElementById('engine-toggle');
+                const status = document.getElementById('engine-status');
+                if (isRunning) {
+                    toggle.classList.add('toggle-active');
+                    status.innerText = 'RUNNING';
+                    status.className = 'text-sm font-bold text-green-500';
+                } else {
+                    toggle.classList.remove('toggle-active');
+                    status.innerText = 'STOPPED';
+                    status.className = 'text-sm font-bold text-red-500';
+                }
+            }
+
+            // Locker Toggle State
+            if (data.locker_running !== isLockerRunning) {
+                isLockerRunning = data.locker_running;
+                const toggle = document.getElementById('locker-toggle');
+                const status = document.getElementById('locker-status');
+                if (isLockerRunning) {
+                    toggle.classList.add('toggle-active');
+                    status.innerText = 'ON';
+                    status.className = 'text-sm font-bold text-green-500';
+                } else {
+                    toggle.classList.remove('toggle-active');
+                    status.innerText = 'OFF';
+                    status.className = 'text-sm font-bold text-red-500';
+                }
+            }
+        }
+
+        async function addSession() {
+            const sid = document.getElementById('session-input').value;
+            const proxy = document.getElementById('session-proxy-input').value;
+            
+            if (!sid) return;
+            
+            document.getElementById('session-input').value = '';
+            document.getElementById('session-proxy-input').value = '';
+            
+            const res = await fetch('/api/session', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({session_id: sid, proxy: proxy}) 
+            });
+            
+            if (!res.ok) {
+                const err = await res.json();
+                alert(err.error);
+            }
+            loadState();
+        }
+
+        async function removeSession(sid) {
+            await fetch('/api/session/' + encodeURIComponent(sid), { method: 'DELETE' });
+            loadState();
+        }
+
+        async function toggleEngine() {
+            await saveConfig();
+            const res = await fetch('/api/toggle', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({running: !isRunning}) 
+            });
+            if (!res.ok) alert((await res.json()).error);
+            loadState();
+        }
+
+        async function toggleLocker() {
+            await saveConfig();
+            const res = await fetch('/api/toggle_locker', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({running: !isLockerRunning}) 
+            });
+            if (!res.ok) alert((await res.json()).error);
+            loadState();
+        }
+
+        setInterval(loadState, 2000);
+        loadState();
+    </script>
+</body>
+</html>
